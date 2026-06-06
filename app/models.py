@@ -22,6 +22,7 @@ class PassStatus(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     expired  = "expired"
+    revoked  = "revoked"
 
 class RFIDStatus(str, enum.Enum):
     pending = "pending"
