@@ -270,3 +270,26 @@ def get_pass_timeline(
 
     events.sort(key=lambda e: e["time"])
     return events
+
+
+@router.get("/{pass_id}/otp-status")
+def get_otp_status(
+    pass_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Simulation only - returns the OTP so testers can verify without SMS.
+    In production this endpoint would not exist.
+    """
+    otp = db.query(OTPRequest).filter(OTPRequest.pass_id == pass_id).first()
+    if not otp:
+        raise HTTPException(status_code=404, detail="No OTP found for this pass")
+    return {
+        "pass_id": pass_id,
+        "phone": otp.phone,
+        "otp_code": otp.otp_code,
+        "verified": otp.verified,
+        "expires_at": otp.expires_at,
+        "note": "This endpoint is for simulation only. In production, OTP is sent via SMS."
+    }

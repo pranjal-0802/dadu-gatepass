@@ -304,7 +304,15 @@ async function applyPass() {
   }
   try {
     const pass = await api('POST', '/passes/', body);
-    alert_('apply-alert', 'Pass #' + pass.id + ' submitted. Status: PENDING', 'success');
+    if (pass.status === 'pending_otp') {
+      const otpData = await api('GET', '/passes/' + pass.id + '/otp-status');
+      alert_('apply-alert',
+        'Pass #' + pass.id + ' created. OTP <strong>' + otpData.otp_code + '</strong> sent to ' + otpData.phone +
+        '.<br><br>Visitor must verify: <a href="/ui#verify-otp-' + pass.id + '" style="color:#4ade80" onclick="showOTPVerify(' + pass.id + ', \'' + otpData.phone + '\')">Click to verify OTP</a>',
+        'success');
+    } else {
+      alert_('apply-alert', 'Pass #' + pass.id + ' submitted. Status: ' + pass.status.toUpperCase(), 'success');
+    }
   } catch(e) { alert_('apply-alert', e.message, 'error'); }
 }
 
@@ -434,6 +442,23 @@ function fmt(dt) {
 }
 
 document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+function showOTPVerify(passId, phone) {
+  document.getElementById('apply-alert').innerHTML +=
+    '<div style="margin-top:16px"><div class="form-group"><label>Enter OTP sent to ' + phone + '</label>' +
+    '<input type="text" id="otp-input-' + passId + '" placeholder="6-digit OTP" maxlength="6" style="max-width:200px"></div>' +
+    '<button class="btn btn-primary" onclick="submitOTP(' + passId + ')">VERIFY OTP</button></div>';
+}
+
+async function submitOTP(passId) {
+  const code = document.getElementById('otp-input-' + passId).value.trim();
+  try {
+    const res = await fetch(API + '/passes/' + passId + '/verify-otp?otp_code=' + code, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) alert_('apply-alert', data.message + ' Pass is now pending superintendent approval.', 'success');
+    else alert_('apply-alert', data.detail, 'error');
+  } catch(e) { alert_('apply-alert', e.message, 'error'); }
+}
 
 async function showTimeline(passId) {
   const el = document.getElementById('timeline-' + passId);
