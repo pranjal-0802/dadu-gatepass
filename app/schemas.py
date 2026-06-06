@@ -78,3 +78,8 @@ class GateLogOut(BaseModel):
     result: GateScanResult
     failure_reason: Optional[str]
     model_config = {"from_attributes": True}
+
+
+class OTPVerifyRequest(BaseModel):
+    pass_id: int
+    otp_code: str

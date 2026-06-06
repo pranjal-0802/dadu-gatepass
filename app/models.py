@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Enum, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime, timezone
 import enum
@@ -23,6 +23,7 @@ class PassStatus(str, enum.Enum):
     rejected = "rejected"
     expired  = "expired"
     revoked  = "revoked"
+    pending_otp = "pending_otp"
 
 class RFIDStatus(str, enum.Enum):
     pending = "pending"
@@ -107,3 +108,19 @@ class GateLog(Base):
 
     pass_           = relationship("Pass", back_populates="gate_logs")
     scanned_by_user = relationship("User", back_populates="gate_logs")
+
+class OTPRequest(Base):
+    """
+    Stores OTP for visitor phone verification.
+    Temporary passes start as pending_otp until visitor verifies their phone.
+    OTP expires after 10 minutes.
+    """
+    __tablename__ = "otp_requests"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    pass_id    = Column(Integer, ForeignKey("passes.id"), unique=True, nullable=False)
+    phone      = Column(String, nullable=False)
+    otp_code   = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    verified   = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

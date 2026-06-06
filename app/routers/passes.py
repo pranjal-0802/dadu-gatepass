@@ -1,15 +1,41 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pyotp
+import random
 
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_role
 from app.core.rules import can_create_pass, get_approver_role, is_auto_approved
-from app.models import User, Pass, TOTPSecret, PassType, PassStatus, UserRole
+from app.models import User, Pass, TOTPSecret, OTPRequest, PassType, PassStatus, UserRole
 from app.schemas import PassCreate, PassOut, PassStatusUpdate
 
 router = APIRouter(prefix="/passes", tags=["Passes"])
+
+
+def validate_phone(phone: str):
+    if not phone or not phone.isdigit() or len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Phone number must be exactly 10 digits")
+
+
+def validate_dates(valid_from: datetime, valid_until: datetime, pass_type: PassType):
+    now = datetime.now(timezone.utc)
+
+    # make naive datetimes timezone aware
+    if valid_from.tzinfo is None:
+        valid_from = valid_from.replace(tzinfo=timezone.utc)
+    if valid_until.tzinfo is None:
+        valid_until = valid_until.replace(tzinfo=timezone.utc)
+
+    if valid_from < now:
+        raise HTTPException(status_code=400, detail="valid_from cannot be in the past")
+
+    if valid_until <= valid_from:
+        raise HTTPException(status_code=400, detail="valid_until must be after valid_from")
+
+    if pass_type == PassType.single_day_visitor:
+        if valid_from.date() != valid_until.date():
+            raise HTTPException(status_code=400, detail="Single day visitor pass must start and end on the same day")
 
 
 @router.post("/", response_model=PassOut, status_code=201)
@@ -24,10 +50,16 @@ def apply_for_pass(
             detail=f"Role '{current_user.role.value}' cannot create a '{payload.pass_type.value}' pass"
         )
 
-    if payload.valid_until <= payload.valid_from:
-        raise HTTPException(status_code=400, detail="valid_until must be after valid_from")
+    # Phone required and validated for temporary passes
+    if payload.pass_type in [PassType.single_day_visitor, PassType.conference_temp]:
+        validate_phone(payload.holder_phone)
+
+    validate_dates(payload.valid_from, payload.valid_until, payload.pass_type)
 
     auto = is_auto_approved(payload.pass_type)
+
+    # Temporary passes start as pending_otp until visitor verifies phone
+    needs_otp = payload.pass_type in [PassType.single_day_visitor, PassType.conference_temp]
 
     new_pass = Pass(
         pass_type=payload.pass_type,
@@ -37,19 +69,73 @@ def apply_for_pass(
         valid_from=payload.valid_from,
         valid_until=payload.valid_until,
         created_by_id=current_user.id,
-        status=PassStatus.approved if auto else PassStatus.pending,
+        status=PassStatus.approved if auto else (PassStatus.pending_otp if needs_otp else PassStatus.pending),
         approved_by_id=current_user.id if auto else None
     )
     db.add(new_pass)
     db.commit()
     db.refresh(new_pass)
 
-    if payload.pass_type in [PassType.conference_temp, PassType.single_day_visitor]:
+    # Generate TOTP secret for QR
+    if needs_otp:
         totp_entry = TOTPSecret(pass_id=new_pass.id, secret_key=pyotp.random_base32())
         db.add(totp_entry)
+
+        # Generate phone OTP
+        otp_code = str(random.randint(100000, 999999))
+        otp_entry = OTPRequest(
+            pass_id=new_pass.id,
+            phone=payload.holder_phone,
+            otp_code=otp_code,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10)
+        )
+        db.add(otp_entry)
         db.commit()
 
+        # In production: send SMS via Twilio/MSG91
+        # For simulation: return OTP in response
+        print(f"[SIMULATED SMS] Sending OTP {otp_code} to {payload.holder_phone}")
+
     return new_pass
+
+
+@router.post("/{pass_id}/verify-otp")
+def verify_visitor_otp(
+    pass_id: int,
+    otp_code: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Public endpoint - no auth required.
+    Visitor enters OTP received on their phone.
+    On success, pass moves from pending_otp to pending (awaiting superintendent approval).
+    """
+    pass_ = db.query(Pass).filter(Pass.id == pass_id).first()
+    if not pass_:
+        raise HTTPException(status_code=404, detail="Pass not found")
+
+    if pass_.status != PassStatus.pending_otp:
+        raise HTTPException(status_code=400, detail="Pass is not awaiting OTP verification")
+
+    otp = db.query(OTPRequest).filter(OTPRequest.pass_id == pass_id).first()
+    if not otp:
+        raise HTTPException(status_code=404, detail="OTP record not found")
+
+    now = datetime.now(timezone.utc)
+    expires = otp.expires_at.replace(tzinfo=timezone.utc) if otp.expires_at.tzinfo is None else otp.expires_at
+
+    if now > expires:
+        raise HTTPException(status_code=400, detail="OTP has expired")
+
+    if otp.otp_code != otp_code:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    otp.verified = True
+    pass_.status = PassStatus.pending
+    pass_.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {"message": "Phone verified. Pass is now pending superintendent approval."}
 
 
 @router.get("/", response_model=list[PassOut])
@@ -102,10 +188,6 @@ def revoke_pass(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("hostel_superintendent", "conference_supervisor"))
 ):
-    """
-    Revoke an approved pass - e.g. visitor blacklisted or pass issued by mistake.
-    Only the relevant supervisor can revoke.
-    """
     pass_ = db.query(Pass).filter(Pass.id == pass_id).first()
     if not pass_:
         raise HTTPException(status_code=404, detail="Pass not found")
@@ -158,64 +240,6 @@ def get_pass_timeline(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Returns a chronological audit trail for a pass.
-    Stitches together data from passes and gate_logs tables.
-    No new tables needed - all data already exists.
-    """
-    pass_ = db.query(Pass).filter(Pass.id == pass_id).first()
-    if not pass_:
-        raise HTTPException(status_code=404, detail="Pass not found")
-
-    events = []
-
-    # Event 1: creation
-    creator = db.query(User).filter(User.id == pass_.created_by_id).first()
-    events.append({
-        "time": pass_.created_at,
-        "event": f"Pass created by {creator.name} ({creator.role.value})",
-        "type": "created"
-    })
-
-    # Event 2: approval or rejection
-    if pass_.approved_by_id and pass_.status in [PassStatus.approved, PassStatus.rejected]:
-        approver = db.query(User).filter(User.id == pass_.approved_by_id).first()
-        events.append({
-            "time": pass_.updated_at,
-            "event": f"Pass {pass_.status.value} by {approver.name} ({approver.role.value})",
-            "type": pass_.status.value
-        })
-
-    # Event 3: revocation
-    if pass_.status == PassStatus.revoked:
-        events.append({
-            "time": pass_.updated_at,
-            "event": "Pass revoked",
-            "type": "revoked"
-        })
-
-    # Events 4+: every gate scan attempt
-    for log in pass_.gate_logs:
-        scanner = db.query(User).filter(User.id == log.scanned_by_id).first()
-        suffix = f" - {log.failure_reason}" if log.failure_reason else ""
-        events.append({
-            "time": log.timestamp,
-            "event": f"Gate scan by {scanner.name} - {log.result.value.upper()}{suffix}",
-            "type": log.result.value
-        })
-
-    # Sort by time
-    events.sort(key=lambda e: e["time"])
-
-    return events
-
-
-@router.get("/{pass_id}/timeline")
-def get_pass_timeline(
-    pass_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
     pass_ = db.query(Pass).filter(Pass.id == pass_id).first()
     if not pass_:
         raise HTTPException(status_code=404, detail="Pass not found")
@@ -224,6 +248,13 @@ def get_pass_timeline(
 
     creator = db.query(User).filter(User.id == pass_.created_by_id).first()
     events.append({"time": pass_.created_at, "event": f"Pass created by {creator.name} ({creator.role.value})", "type": "created"})
+
+    otp = db.query(OTPRequest).filter(OTPRequest.pass_id == pass_id).first()
+    if otp:
+        if otp.verified:
+            events.append({"time": pass_.updated_at, "event": f"Phone {otp.phone} verified by visitor", "type": "approved"})
+        else:
+            events.append({"time": otp.created_at, "event": f"OTP sent to {otp.phone} - awaiting verification", "type": "created"})
 
     if pass_.approved_by_id and pass_.status in [PassStatus.approved, PassStatus.rejected]:
         approver = db.query(User).filter(User.id == pass_.approved_by_id).first()
