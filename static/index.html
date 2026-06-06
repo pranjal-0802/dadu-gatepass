@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DADU Gatepass System</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; }
+  #app { display: flex; min-height: 100vh; }
+  #sidebar { width: 220px; background: #111; border-right: 1px solid #222; padding: 24px 0; display: none; flex-direction: column; }
+  #sidebar .brand { padding: 0 20px 24px; border-bottom: 1px solid #222; font-size: 13px; color: #888; letter-spacing: 2px; text-transform: uppercase; }
+  #sidebar .brand span { color: #4ade80; display: block; font-size: 16px; margin-bottom: 4px; }
+  #sidebar nav { padding: 16px 0; flex: 1; }
+  #sidebar nav button { display: block; width: 100%; padding: 10px 20px; background: none; border: none; color: #888; text-align: left; cursor: pointer; font-family: inherit; font-size: 13px; letter-spacing: 1px; transition: all 0.15s; }
+  #sidebar nav button:hover { color: #e0e0e0; background: #1a1a1a; }
+  #sidebar nav button.active { color: #4ade80; border-left: 2px solid #4ade80; }
+  #sidebar .logout { padding: 16px 20px; border-top: 1px solid #222; font-size: 12px; color: #555; }
+  #sidebar .logout button { background: none; border: 1px solid #333; color: #888; padding: 6px 12px; cursor: pointer; font-family: inherit; font-size: 12px; width: 100%; }
+  #sidebar .logout button:hover { border-color: #ef4444; color: #ef4444; }
+  #main { flex: 1; padding: 40px; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+  h1 { font-size: 22px; font-weight: normal; letter-spacing: 3px; text-transform: uppercase; color: #4ade80; margin-bottom: 8px; }
+  .subtitle { color: #555; font-size: 12px; letter-spacing: 1px; margin-bottom: 32px; }
+  #login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0a0a0a; }
+  .login-box { width: 360px; border: 1px solid #222; padding: 40px; }
+  .login-box h1 { margin-bottom: 4px; }
+  .login-box .subtitle { margin-bottom: 32px; }
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #666; margin-bottom: 6px; }
+  input, select { width: 100%; background: #111; border: 1px solid #222; color: #e0e0e0; padding: 10px 12px; font-family: inherit; font-size: 13px; outline: none; transition: border-color 0.15s; }
+  input:focus, select:focus { border-color: #4ade80; }
+  select option { background: #111; }
+  .btn { padding: 10px 20px; font-family: inherit; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary { background: #4ade80; color: #0a0a0a; font-weight: bold; }
+  .btn-primary:hover { background: #22c55e; }
+  .btn-secondary { background: none; border: 1px solid #333; color: #888; }
+  .btn-secondary:hover { border-color: #888; color: #e0e0e0; }
+  .btn-approve { background: none; border: 1px solid #4ade80; color: #4ade80; padding: 6px 14px; font-size: 11px; font-family: inherit; cursor: pointer; letter-spacing: 1px; }
+  .btn-approve:hover { background: #4ade8011; }
+  .btn-reject { background: none; border: 1px solid #ef4444; color: #ef4444; padding: 6px 14px; font-size: 11px; font-family: inherit; cursor: pointer; letter-spacing: 1px; }
+  .btn-reject:hover { background: #ef444411; }
+  .card { border: 1px solid #1a1a1a; background: #0f0f0f; padding: 24px; margin-bottom: 16px; }
+  .card-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .card-info { flex: 1; }
+  .card-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #555; margin-bottom: 2px; }
+  .card-value { font-size: 14px; color: #ccc; margin-bottom: 12px; }
+  .badge { display: inline-block; padding: 3px 10px; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; border: 1px solid; }
+  .badge-pending { color: #f59e0b; border-color: #f59e0b; }
+  .badge-approved { color: #4ade80; border-color: #4ade80; }
+  .badge-rejected { color: #ef4444; border-color: #ef4444; }
+  .badge-active { color: #4ade80; border-color: #4ade80; }
+  .badge-revoked { color: #ef4444; border-color: #ef4444; }
+  .badge-success { color: #4ade80; border-color: #4ade80; }
+  .badge-failure { color: #ef4444; border-color: #ef4444; }
+  .alert { padding: 12px 16px; font-size: 12px; letter-spacing: 1px; margin-bottom: 16px; border-left: 3px solid; }
+  .alert-success { border-color: #4ade80; background: #4ade8011; color: #4ade80; }
+  .alert-error { border-color: #ef4444; background: #ef444411; color: #ef4444; }
+  .alert-info { border-color: #60a5fa; background: #60a5fa11; color: #60a5fa; }
+  .qr-box { border: 1px solid #222; padding: 24px; text-align: center; background: #0f0f0f; margin-top: 16px; }
+  .totp-code { font-size: 48px; letter-spacing: 12px; color: #4ade80; margin: 16px 0; font-weight: bold; }
+  .totp-timer { font-size: 12px; color: #555; letter-spacing: 2px; }
+  .timer-bar { width: 100%; height: 3px; background: #1a1a1a; margin-top: 8px; }
+  .timer-fill { height: 100%; background: #4ade80; transition: width 1s linear; }
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .empty-state { text-align: center; padding: 48px; color: #333; font-size: 13px; letter-spacing: 2px; border: 1px dashed #1a1a1a; }
+  .divider { border: none; border-top: 1px solid #1a1a1a; margin: 24px 0; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+</head>
+<body>
+
+<div id="login-page" class="page active">
+  <div class="login-box">
+    <h1>DADU</h1>
+    <p class="subtitle">GATEPASS SYSTEM — BPHC</p>
+    <div id="login-alert"></div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="you@bits.ac.in">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="••••••••">
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="login()">LOGIN</button>
+  </div>
+</div>
+
+<div id="app-layout" style="display:none; flex:1">
+  <div id="sidebar">
+    <div class="brand"><span>DADU</span>GATEPASS</div>
+    <nav id="nav-links"></nav>
+    <div class="logout">
+      <div id="user-info" style="margin-bottom:10px; font-size:11px; color:#555;"></div>
+      <button onclick="logout()">LOGOUT</button>
+    </div>
+  </div>
+  <div id="main">
+
+    <div id="page-apply" class="page">
+      <h1>Apply for Pass</h1>
+      <p class="subtitle">REQUEST A VISITOR PASS FOR YOUR GUEST</p>
+      <div id="apply-alert"></div>
+      <div style="max-width:480px">
+        <div class="form-group"><label>Visitor Name</label><input type="text" id="apply-name" placeholder="Full name"></div>
+        <div class="form-group"><label>Visitor Phone</label><input type="text" id="apply-phone" placeholder="10-digit number"></div>
+        <div class="form-group"><label>Visitor Email (optional)</label><input type="email" id="apply-email" placeholder="visitor@email.com"></div>
+        <div class="form-group"><label>Valid From</label><input type="datetime-local" id="apply-from"></div>
+        <div class="form-group"><label>Valid Until</label><input type="datetime-local" id="apply-until"></div>
+        <button class="btn btn-primary" onclick="applyPass()">SUBMIT APPLICATION</button>
+      </div>
+    </div>
+
+    <div id="page-my-passes" class="page">
+      <div class="section-header">
+        <div><h1>My Passes</h1><p class="subtitle">YOUR PASS APPLICATIONS</p></div>
+        <button class="btn btn-secondary" onclick="loadMyPasses()">REFRESH</button>
+      </div>
+      <div id="my-passes-list"></div>
+    </div>
+
+    <div id="page-qr" class="page">
+      <h1>View QR Code</h1>
+      <p class="subtitle">SHOW THIS CODE TO GATE SECURITY</p>
+      <div style="max-width:300px">
+        <div class="form-group"><label>Pass ID</label><input type="number" id="qr-pass-id" placeholder="Enter pass ID"></div>
+        <button class="btn btn-primary" onclick="loadQR()">GET CODE</button>
+      </div>
+      <div id="qr-display"></div>
+    </div>
+
+    <div id="page-pending" class="page">
+      <div class="section-header">
+        <div><h1>Pending Passes</h1><p class="subtitle">REVIEW AND APPROVE APPLICATIONS</p></div>
+        <button class="btn btn-secondary" onclick="loadPendingPasses()">REFRESH</button>
+      </div>
+      <div id="pending-passes-list"></div>
+    </div>
+
+    <div id="page-verify" class="page">
+      <h1>Verify Pass</h1>
+      <p class="subtitle">SCAN VISITOR QR CODE</p>
+      <div id="verify-alert"></div>
+      <div style="max-width:360px">
+        <div class="form-group"><label>Pass ID</label><input type="number" id="verify-pass-id" placeholder="From visitor"></div>
+        <div class="form-group"><label>TOTP Code</label><input type="text" id="verify-totp" placeholder="6-digit code" maxlength="6"></div>
+        <button class="btn btn-primary" style="width:100%" onclick="verifyTOTP()">VERIFY</button>
+      </div>
+    </div>
+
+    <div id="page-rfid-scan" class="page">
+      <h1>RFID Scan</h1>
+      <p class="subtitle">SIMULATE RFID READER AT GATE</p>
+      <div id="rfid-scan-alert"></div>
+      <div style="max-width:360px">
+        <div class="form-group"><label>Tag UID</label><input type="text" id="rfid-uid" placeholder="e.g. RFID-A1B2C3D4E5F6"></div>
+        <button class="btn btn-primary" style="width:100%" onclick="scanRFID()">SCAN</button>
+      </div>
+    </div>
+
+    <div id="page-gate-logs" class="page">
+      <div class="section-header">
+        <div><h1>Gate Logs</h1><p class="subtitle">AUDIT TRAIL OF ALL SCAN ATTEMPTS</p></div>
+        <button class="btn btn-secondary" onclick="loadGateLogs()">REFRESH</button>
+      </div>
+      <div id="gate-logs-list"></div>
+    </div>
+
+    <div id="page-rfid-request" class="page">
+      <h1>Request RFID Tag</h1>
+      <p class="subtitle">APPLY FOR VEHICLE PASS</p>
+      <div id="rfid-request-alert"></div>
+      <div style="max-width:360px">
+        <div class="form-group"><label>Vehicle Number</label><input type="text" id="vehicle-number" placeholder="e.g. TS09AB1234"></div>
+        <button class="btn btn-primary" onclick="requestRFID()">SUBMIT REQUEST</button>
+      </div>
+      <hr class="divider">
+      <div class="section-header">
+        <div><h1>My RFID Tags</h1><p class="subtitle">YOUR VEHICLE PASS REQUESTS</p></div>
+        <button class="btn btn-secondary" onclick="loadMyTags()">REFRESH</button>
+      </div>
+      <div id="my-tags-list"></div>
+    </div>
+
+    <div id="page-rfid-approve" class="page">
+      <div class="section-header">
+        <div><h1>RFID Requests</h1><p class="subtitle">PENDING VEHICLE PASS APPROVALS</p></div>
+        <button class="btn btn-secondary" onclick="loadPendingRFID()">REFRESH</button>
+      </div>
+      <div id="pending-rfid-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let token = null;
+let currentRole = null;
+let qrInterval = null;
+
+const NAV = {
+  student: [
+    { label: 'Apply for Pass', page: 'apply', load: null },
+    { label: 'My Passes', page: 'my-passes', load: loadMyPasses },
+    { label: 'View QR Code', page: 'qr', load: null },
+  ],
+  faculty: [
+    { label: 'Request RFID', page: 'rfid-request', load: loadMyTags },
+  ],
+  hostel_superintendent: [
+    { label: 'Pending Passes', page: 'pending', load: loadPendingPasses },
+    { label: 'RFID Approvals', page: 'rfid-approve', load: loadPendingRFID },
+    { label: 'Gate Logs', page: 'gate-logs', load: loadGateLogs },
+  ],
+  conference_supervisor: [
+    { label: 'Pending Passes', page: 'pending', load: loadPendingPasses },
+    { label: 'Gate Logs', page: 'gate-logs', load: loadGateLogs },
+  ],
+  gate_security: [
+    { label: 'Verify Pass', page: 'verify', load: null },
+    { label: 'RFID Scan', page: 'rfid-scan', load: null },
+    { label: 'Gate Logs', page: 'gate-logs', load: loadGateLogs },
+  ],
+};
+
+async function api(method, path, body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Request failed');
+  return data;
+}
+
+function alert_(id, msg, type) {
+  document.getElementById(id).innerHTML = '<div class="alert alert-' + type + '">' + msg + '</div>';
+}
+
+function clearAlert(id) { document.getElementById(id).innerHTML = ''; }
+
+async function login() {
+  clearAlert('login-alert');
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  try {
+    const data = await api('POST', '/auth/login', { email, password });
+    token = data.access_token;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    currentRole = payload.role;
+    showApp(email);
+  } catch(e) { alert_('login-alert', e.message, 'error'); }
+}
+
+function logout() {
+  token = null; currentRole = null;
+  if (qrInterval) clearInterval(qrInterval);
+  document.getElementById('app-layout').style.display = 'none';
+  document.getElementById('login-page').classList.add('active');
+  document.getElementById('login-password').value = '';
+}
+
+function showApp(email) {
+  document.getElementById('login-page').classList.remove('active');
+  document.getElementById('app-layout').style.display = 'flex';
+  document.getElementById('sidebar').style.display = 'flex';
+  document.getElementById('user-info').textContent = email;
+  const nav = document.getElementById('nav-links');
+  nav.innerHTML = '';
+  const items = NAV[currentRole] || [];
+  items.forEach((item, i) => {
+    const btn = document.createElement('button');
+    btn.textContent = item.label;
+    btn.onclick = () => showPage(item.page, item.load, btn);
+    nav.appendChild(btn);
+    if (i === 0) showPage(item.page, item.load, btn);
+  });
+}
+
+function showPage(pageId, loadFn, btn) {
+  if (qrInterval) { clearInterval(qrInterval); qrInterval = null; }
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#nav-links button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + pageId).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (loadFn) loadFn();
+}
+
+async function applyPass() {
+  clearAlert('apply-alert');
+  const body = {
+    pass_type: 'single_day_visitor',
+    holder_name: document.getElementById('apply-name').value.trim(),
+    holder_phone: document.getElementById('apply-phone').value.trim(),
+    holder_email: document.getElementById('apply-email').value.trim() || null,
+    valid_from: document.getElementById('apply-from').value,
+    valid_until: document.getElementById('apply-until').value,
+  };
+  if (!body.holder_name || !body.valid_from || !body.valid_until) {
+    return alert_('apply-alert', 'Name, valid from, and valid until are required.', 'error');
+  }
+  try {
+    const pass = await api('POST', '/passes/', body);
+    alert_('apply-alert', 'Pass #' + pass.id + ' submitted. Status: PENDING', 'success');
+  } catch(e) { alert_('apply-alert', e.message, 'error'); }
+}
+
+async function loadMyPasses() {
+  const el = document.getElementById('my-passes-list');
+  el.innerHTML = '<div class="empty-state">LOADING...</div>';
+  try {
+    const passes = await api('GET', '/passes/');
+    if (!passes.length) { el.innerHTML = '<div class="empty-state">NO PASSES FOUND</div>'; return; }
+    el.innerHTML = passes.map(p => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Holder</div><div class="card-value">' + p.holder_name + '</div><div class="card-label">Valid</div><div class="card-value">' + fmt(p.valid_from) + ' to ' + fmt(p.valid_until) + '</div><div class="card-label">Pass ID</div><div class="card-value">#' + p.id + '</div></div><span class="badge badge-' + p.status + '">' + p.status.toUpperCase() + '</span></div></div>').join('');
+  } catch(e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+}
+
+async function loadQR() {
+  const passId = document.getElementById('qr-pass-id').value;
+  const el = document.getElementById('qr-display');
+  if (!passId) return;
+  if (qrInterval) clearInterval(qrInterval);
+  async function refresh() {
+    try {
+      const data = await api('GET', '/passes/' + passId + '/qr-payload');
+      el.innerHTML = '<div class="qr-box"><div class="card-label">PASS #' + data.pass_id + ' — ' + data.holder_name + '</div><div class="totp-code">' + data.totp_code + '</div><div class="totp-timer">REFRESHES IN ' + data.seconds_remaining + 's</div><div class="timer-bar"><div class="timer-fill" style="width:' + (data.seconds_remaining/30*100) + '%"></div></div><div style="margin-top:16px;font-size:11px;color:#333;letter-spacing:1px">Show this code + Pass ID #' + data.pass_id + ' to gate security</div></div>';
+    } catch(e) {
+      el.innerHTML = '<div class="alert alert-error" style="margin-top:16px">' + e.message + '</div>';
+      clearInterval(qrInterval);
+    }
+  }
+  await refresh();
+  qrInterval = setInterval(refresh, 30000);
+}
+
+async function loadPendingPasses() {
+  const el = document.getElementById('pending-passes-list');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state">LOADING...</div>';
+  try {
+    const passes = await api('GET', '/passes/');
+    const pending = passes.filter(p => p.status === 'pending');
+    if (!pending.length) { el.innerHTML = '<div class="empty-state">NO PENDING PASSES</div>'; return; }
+    el.innerHTML = pending.map(p => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Holder</div><div class="card-value">' + p.holder_name + (p.holder_phone ? ' · ' + p.holder_phone : '') + '</div><div class="card-label">Type</div><div class="card-value">' + p.pass_type.replace(/_/g,' ').toUpperCase() + '</div><div class="card-label">Valid</div><div class="card-value">' + fmt(p.valid_from) + ' to ' + fmt(p.valid_until) + '</div><div class="card-label">Applied by User #' + p.created_by_id + '</div></div><div style="display:flex;flex-direction:column;gap:8px"><button class="btn-approve" onclick="updatePassStatus(' + p.id + ',\'approved\')">APPROVE</button><button class="btn-reject" onclick="updatePassStatus(' + p.id + ',\'rejected\')">REJECT</button></div></div></div>').join('');
+  } catch(e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+}
+
+async function updatePassStatus(passId, status) {
+  try { await api('PATCH', '/passes/' + passId + '/status', { status }); loadPendingPasses(); }
+  catch(e) { alert(e.message); }
+}
+
+async function verifyTOTP() {
+  clearAlert('verify-alert');
+  const pass_id = parseInt(document.getElementById('verify-pass-id').value);
+  const totp_code = document.getElementById('verify-totp').value.trim();
+  if (!pass_id || !totp_code) return alert_('verify-alert', 'Pass ID and TOTP code are required.', 'error');
+  try {
+    const log = await api('POST', '/gate/verify-totp', { pass_id, totp_code });
+    alert_('verify-alert', 'ACCESS GRANTED — Pass #' + log.pass_id + ' verified at ' + fmt(log.timestamp), 'success');
+    document.getElementById('verify-totp').value = '';
+  } catch(e) { alert_('verify-alert', 'ACCESS DENIED — ' + e.message, 'error'); }
+}
+
+async function scanRFID() {
+  clearAlert('rfid-scan-alert');
+  const tag_uid = document.getElementById('rfid-uid').value.trim();
+  if (!tag_uid) return alert_('rfid-scan-alert', 'Tag UID is required.', 'error');
+  try {
+    const result = await api('POST', '/gate/scan-rfid', { tag_uid });
+    if (result.result === 'granted') alert_('rfid-scan-alert', 'ACCESS GRANTED — ' + result.faculty_name + ' · ' + result.vehicle_number, 'success');
+    else alert_('rfid-scan-alert', 'ACCESS DENIED — ' + result.reason, 'error');
+  } catch(e) { alert_('rfid-scan-alert', e.message, 'error'); }
+}
+
+async function loadGateLogs() {
+  const el = document.getElementById('gate-logs-list');
+  el.innerHTML = '<div class="empty-state">LOADING...</div>';
+  try {
+    const logs = await api('GET', '/gate/logs');
+    if (!logs.length) { el.innerHTML = '<div class="empty-state">NO LOGS YET</div>'; return; }
+    el.innerHTML = logs.map(l => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Pass #' + l.pass_id + ' · Scanned by User #' + l.scanned_by_id + '</div><div class="card-value">' + fmt(l.timestamp) + '</div>' + (l.failure_reason ? '<div style="font-size:12px;color:#666">' + l.failure_reason + '</div>' : '') + '</div><span class="badge badge-' + l.result + '">' + l.result.toUpperCase() + '</span></div></div>').join('');
+  } catch(e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+}
+
+async function requestRFID() {
+  clearAlert('rfid-request-alert');
+  const vehicle_number = document.getElementById('vehicle-number').value.trim();
+  if (!vehicle_number) return alert_('rfid-request-alert', 'Vehicle number is required.', 'error');
+  try {
+    const tag = await api('POST', '/rfid/request', { vehicle_number });
+    alert_('rfid-request-alert', 'Request submitted for ' + tag.vehicle_number + '. Status: PENDING', 'success');
+    loadMyTags();
+  } catch(e) { alert_('rfid-request-alert', e.message, 'error'); }
+}
+
+async function loadMyTags() {
+  const el = document.getElementById('my-tags-list');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state">LOADING...</div>';
+  try {
+    const tags = await api('GET', '/rfid/my-tags');
+    if (!tags.length) { el.innerHTML = '<div class="empty-state">NO RFID TAGS</div>'; return; }
+    el.innerHTML = tags.map(t => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Vehicle</div><div class="card-value">' + t.vehicle_number + '</div>' + (t.tag_uid ? '<div class="card-label">Tag UID</div><div class="card-value">' + t.tag_uid + '</div>' : '') + '</div><span class="badge badge-' + t.status + '">' + t.status.toUpperCase() + '</span></div></div>').join('');
+  } catch(e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+}
+
+async function loadPendingRFID() {
+  const el = document.getElementById('pending-rfid-list');
+  el.innerHTML = '<div class="empty-state">LOADING...</div>';
+  try {
+    const tags = await api('GET', '/rfid/pending');
+    if (!tags.length) { el.innerHTML = '<div class="empty-state">NO PENDING RFID REQUESTS</div>'; return; }
+    el.innerHTML = tags.map(t => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Faculty #' + t.faculty_id + '</div><div class="card-value">' + t.vehicle_number + '</div><div class="card-label">Requested</div><div class="card-value">' + fmt(t.requested_at) + '</div></div><div style="display:flex;flex-direction:column;gap:8px"><button class="btn-approve" onclick="approveRFID(' + t.id + ')">APPROVE</button><button class="btn-reject" onclick="revokeRFID(' + t.id + ')">REJECT</button></div></div></div>').join('');
+  } catch(e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
+}
+
+async function approveRFID(id) {
+  try { await api('PATCH', '/rfid/' + id + '/approve'); loadPendingRFID(); }
+  catch(e) { alert(e.message); }
+}
+
+async function revokeRFID(id) {
+  try { await api('PATCH', '/rfid/' + id + '/revoke'); loadPendingRFID(); }
+  catch(e) { alert(e.message); }
+}
+
+function fmt(dt) {
+  if (!dt) return '-';
+  return new Date(dt).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+</script>
+</body>
+</html>
