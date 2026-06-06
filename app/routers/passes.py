@@ -150,3 +150,92 @@ def get_qr_payload(
         "seconds_remaining": 30 - (now_ts % 30),
         "valid_until": pass_.valid_until
     }
+
+
+@router.get("/{pass_id}/timeline")
+def get_pass_timeline(
+    pass_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Returns a chronological audit trail for a pass.
+    Stitches together data from passes and gate_logs tables.
+    No new tables needed - all data already exists.
+    """
+    pass_ = db.query(Pass).filter(Pass.id == pass_id).first()
+    if not pass_:
+        raise HTTPException(status_code=404, detail="Pass not found")
+
+    events = []
+
+    # Event 1: creation
+    creator = db.query(User).filter(User.id == pass_.created_by_id).first()
+    events.append({
+        "time": pass_.created_at,
+        "event": f"Pass created by {creator.name} ({creator.role.value})",
+        "type": "created"
+    })
+
+    # Event 2: approval or rejection
+    if pass_.approved_by_id and pass_.status in [PassStatus.approved, PassStatus.rejected]:
+        approver = db.query(User).filter(User.id == pass_.approved_by_id).first()
+        events.append({
+            "time": pass_.updated_at,
+            "event": f"Pass {pass_.status.value} by {approver.name} ({approver.role.value})",
+            "type": pass_.status.value
+        })
+
+    # Event 3: revocation
+    if pass_.status == PassStatus.revoked:
+        events.append({
+            "time": pass_.updated_at,
+            "event": "Pass revoked",
+            "type": "revoked"
+        })
+
+    # Events 4+: every gate scan attempt
+    for log in pass_.gate_logs:
+        scanner = db.query(User).filter(User.id == log.scanned_by_id).first()
+        suffix = f" - {log.failure_reason}" if log.failure_reason else ""
+        events.append({
+            "time": log.timestamp,
+            "event": f"Gate scan by {scanner.name} - {log.result.value.upper()}{suffix}",
+            "type": log.result.value
+        })
+
+    # Sort by time
+    events.sort(key=lambda e: e["time"])
+
+    return events
+
+
+@router.get("/{pass_id}/timeline")
+def get_pass_timeline(
+    pass_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    pass_ = db.query(Pass).filter(Pass.id == pass_id).first()
+    if not pass_:
+        raise HTTPException(status_code=404, detail="Pass not found")
+
+    events = []
+
+    creator = db.query(User).filter(User.id == pass_.created_by_id).first()
+    events.append({"time": pass_.created_at, "event": f"Pass created by {creator.name} ({creator.role.value})", "type": "created"})
+
+    if pass_.approved_by_id and pass_.status in [PassStatus.approved, PassStatus.rejected]:
+        approver = db.query(User).filter(User.id == pass_.approved_by_id).first()
+        events.append({"time": pass_.updated_at, "event": f"Pass {pass_.status.value} by {approver.name} ({approver.role.value})", "type": pass_.status.value})
+
+    if pass_.status == PassStatus.revoked:
+        events.append({"time": pass_.updated_at, "event": "Pass revoked", "type": "revoked"})
+
+    for log in pass_.gate_logs:
+        scanner = db.query(User).filter(User.id == log.scanned_by_id).first()
+        suffix = f" - {log.failure_reason}" if log.failure_reason else ""
+        events.append({"time": log.timestamp, "event": f"Gate scan by {scanner.name} - {log.result.value.upper()}{suffix}", "type": log.result.value})
+
+    events.sort(key=lambda e: e["time"])
+    return events
