@@ -344,7 +344,7 @@ async function loadPendingPasses() {
     const passes = await api('GET', '/passes/');
     const pending = passes.filter(p => p.status === 'pending');
     if (!pending.length) { el.innerHTML = '<div class="empty-state">NO PENDING PASSES</div>'; return; }
-    el.innerHTML = pending.map(p => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Holder</div><div class="card-value">' + p.holder_name + (p.holder_phone ? ' · ' + p.holder_phone : '') + '</div><div class="card-label">Type</div><div class="card-value">' + p.pass_type.replace(/_/g,' ').toUpperCase() + '</div><div class="card-label">Valid</div><div class="card-value">' + fmt(p.valid_from) + ' to ' + fmt(p.valid_until) + '</div><div class="card-label">Applied by User #' + p.created_by_id + '</div></div><div style="display:flex;flex-direction:column;gap:8px"><button class="btn-approve" onclick="updatePassStatus(' + p.id + ',\'approved\')">APPROVE</button><button class="btn-reject" onclick="updatePassStatus(' + p.id + ',\'rejected\')">REJECT</button></div></div></div>').join('');
+    el.innerHTML = pending.map(p => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Holder</div><div class="card-value">' + p.holder_name + (p.holder_phone ? ' · ' + p.holder_phone : '') + '</div><div class="card-label">Type</div><div class="card-value">' + p.pass_type.replace(/_/g,' ').toUpperCase() + '</div><div class="card-label">Valid</div><div class="card-value">' + fmt(p.valid_from) + ' to ' + fmt(p.valid_until) + '</div><div class="card-label">Applied by User #' + p.created_by_id + '</div></div><div style="display:flex;flex-direction:column;gap:8px"><button class="btn-approve" onclick="updatePassStatus(' + p.id + ',\'approved\')">APPROVE</button><button class="btn-reject" onclick="updatePassStatus(' + p.id + ',\'rejected\')">REJECT</button><button class="btn-secondary" style="padding:6px 14px;font-size:11px;" onclick="showTimeline(' + p.id + ')">TIMELINE</button></div></div><div id="timeline-' + p.id + '"></div></div>').join('');
   } catch(e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
 }
 
@@ -414,7 +414,7 @@ async function loadPendingRFID() {
   try {
     const tags = await api('GET', '/rfid/pending');
     if (!tags.length) { el.innerHTML = '<div class="empty-state">NO PENDING RFID REQUESTS</div>'; return; }
-    el.innerHTML = tags.map(t => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Faculty #' + t.faculty_id + '</div><div class="card-value">' + t.vehicle_number + '</div><div class="card-label">Requested</div><div class="card-value">' + fmt(t.requested_at) + '</div></div><div style="display:flex;flex-direction:column;gap:8px"><button class="btn-approve" onclick="approveRFID(' + t.id + ')">APPROVE</button><button class="btn-reject" onclick="revokeRFID(' + t.id + ')">REJECT</button></div></div></div>').join('');
+    el.innerHTML = tags.map(t => '<div class="card"><div class="card-row"><div class="card-info"><div class="card-label">Faculty #' + t.faculty_id + '</div><div class="card-value">' + t.vehicle_number + '</div><div class="card-label">Requested</div><div class="card-value">' + fmt(t.requested_at) + '</div></div><div style="display:flex;flex-direction:column;gap:8px"><button class="btn-approve" onclick="approveRFID(' + t.id + ')">APPROVE</button><button class="btn-reject" onclick="revokeRFID(' + t.id + ')">REJECT</button><button class="btn-secondary" style="padding:6px 14px;font-size:11px;" onclick="showTimeline(' + p.id + ')">TIMELINE</button></div></div><div id="timeline-' + p.id + '"></div></div>').join('');
   } catch(e) { el.innerHTML = '<div class="alert alert-error">' + e.message + '</div>'; }
 }
 
@@ -434,6 +434,17 @@ function fmt(dt) {
 }
 
 document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+async function showTimeline(passId) {
+  const el = document.getElementById('timeline-' + passId);
+  if (el.innerHTML) { el.innerHTML = ''; return; }
+  try {
+    const events = await api('GET', '/passes/' + passId + '/timeline');
+    const colors = { created:'#60a5fa', approved:'#4ade80', rejected:'#ef4444', revoked:'#ef4444', success:'#4ade80', failure:'#ef4444' };
+    el.innerHTML = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #1a1a1a">' +
+      events.map(e => '<div style="display:flex;gap:12px;margin-bottom:10px;align-items:flex-start"><div style="width:8px;height:8px;border-radius:50%;background:' + (colors[e.type]||'#555') + ';margin-top:4px;flex-shrink:0"></div><div><div style="font-size:10px;color:#555;letter-spacing:1px">' + fmt(e.time) + '</div><div style="font-size:12px;color:#ccc">' + e.event + '</div></div></div>').join('') + '</div>';
+  } catch(e) { alert(e.message); }
+}
 </script>
 </body>
 </html>
