@@ -32,7 +32,7 @@ API docs: http://localhost:8000/docs
 
 ### Stack
 - Backend: FastAPI (Python)
-- Database: SQLite via SQLAlchemy ORM
+- Database: PostgreSQL (production via Railway) / SQLite (local development) via SQLAlchemy ORM
 - Auth: JWT tokens + bcrypt password hashing
 - QR Verification: TOTP via pyotp (RFC 6238)
 - Frontend: Single-page vanilla HTML/JS, no framework
