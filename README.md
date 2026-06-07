@@ -40,6 +40,7 @@ API docs: http://localhost:8000/docs
 
 ### Project Structure
 
+```
 dadu-gatepass/
 ├── main.py               # app entry point
 ├── seed.py               # creates test users
@@ -58,6 +59,7 @@ dadu-gatepass/
 │       └── rfid.py       # RFID tag requests and approvals
 └── static/
     └── index.html        # single-page frontend
+```
 
 ### Database Schema
 - users - all system users with roles
