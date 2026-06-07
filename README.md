@@ -10,8 +10,11 @@ pip install -r requirements.txt
 python seed.py
 uvicorn main:app --reload
 
-UI: http://localhost:8000/ui
-API docs: http://localhost:8000/docs
+UI: https://dadu-gatepass-production.up.railway.app/ui
+API docs: https://dadu-gatepass-production.up.railway.app/docs
+
+Local UI: http://localhost:8000/ui
+Local API docs: http://localhost:8000/docs
 
 ## Test Credentials
 
