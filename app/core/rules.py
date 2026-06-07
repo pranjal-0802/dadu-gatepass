@@ -33,3 +33,6 @@ def get_approver_role(pass_type: PassType) -> UserRole | None:
 
 def is_auto_approved(pass_type: PassType) -> bool:
     return APPROVAL_MATRIX[pass_type]["auto_approve"]
+
+# Gate security can view all approved passes across all types
+GATE_VIEWABLE_STATUSES = ["approved"]
