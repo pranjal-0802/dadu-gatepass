@@ -7,6 +7,7 @@ import random
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_role
 from app.core.rules import can_create_pass, get_approver_role, is_auto_approved
+from app.core.expiry import expire_stale_passes
 from app.models import User, Pass, TOTPSecret, OTPRequest, PassType, PassStatus, UserRole
 from app.schemas import PassCreate, PassOut, PassStatusUpdate
 
@@ -143,6 +144,7 @@ def list_passes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    expire_stale_passes(db)
     if current_user.role in [UserRole.student, UserRole.faculty]:
         return db.query(Pass).filter(Pass.created_by_id == current_user.id).all()
     if current_user.role == UserRole.hostel_superintendent:

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import pyotp
 
 from app.core.database import get_db
+from app.core.expiry import expire_stale_passes
 from app.core.auth import get_current_user, require_role
 from app.models import User, Pass, RFIDTag, GateLog, PassStatus, RFIDStatus, GateScanResult
 from app.schemas import TOTPVerifyRequest, RFIDScanRequest, GateLogOut
@@ -20,6 +21,7 @@ def verify_totp(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("gate_security"))
 ):
+    expire_stale_passes(db)
     pass_ = db.query(Pass).filter(Pass.id == payload.pass_id).first()
     if not pass_:
         raise HTTPException(status_code=404, detail="Pass not found")
